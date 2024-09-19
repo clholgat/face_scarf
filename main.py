@@ -22,6 +22,9 @@ import math
 # For cropping [left, top, right, bottom]
 PADDING = [10, 55, 10, 50]
 
+# Indexs of facial landmarks
+# https://ibug.doc.ic.ac.uk/resources/facial-point-annotations/
+
 
 print("Building you a face")
 
@@ -33,7 +36,7 @@ def display_rect(img, x, y, w, l):
     plt.title('Face Detection')
     plt.show()
 
-def crop_to_face(img, face):
+def crop_to_face(img, face, stitches, rows):
     (x,y,w,l) = face
 
     x = x - PADDING[0]
@@ -41,7 +44,21 @@ def crop_to_face(img, face):
     w = w + PADDING[2] + PADDING[0]
     l = l + PADDING[3] + PADDING[1]
 
-    return (img[y:(y+l), x:(x+w)] , (face[0] - x, face[1] - y, face[2], face[3]))
+    cropped = img[y:(y+l), x:(x+w)]
+
+    height, width, _ = cropped.shape
+
+    # Face should be 8" wide
+    # Knitting this sideways
+    finalWidth = 8 * rows
+
+    # What the height would be if the stitches were square
+    scaledHeight = (height / width) * finalWidth
+
+    # Converted to stitch aspect ratio
+    finalHeight = scaledHeight * (stitches / rows)
+
+    return cv2.resize(cropped, (int(finalWidth), int(finalHeight)), interpolation = cv2.INTER_LINEAR)
 
 def find_face_and_features(img):
     # Model should be local
@@ -88,7 +105,7 @@ def find_face_and_features(img):
     _, landmarks = landmark_detector.fit(imgGray, np.array([face]))
 
     for landmark in landmarks:
-        eyes = [landmark[0][36], landmark[0][45]]
+        eyes = [landmark[0][40], landmark[0][41], landmark[0][46], landmark[0][47]]
         for x,y in eyes:
             # display landmarks on "image_cropped"
             # with white colour in BGR and thickness 1
@@ -98,6 +115,15 @@ def find_face_and_features(img):
     plt.show()
 
     return (face, landmark[0])
+
+def split_face(img, landmarks):
+    eyeTop = max(landmarks[37][1], landmarks[38][1], landmarks[43][1], landmarks[44][1])
+    eyeBottom = min(landmarks[40][1], landmarks[41][1], landmarks[46][1], landmarks[47][1])
+
+    top = img[0:int(eyeTop), 0:-1]
+    bottom = img[int(eyeBottom):-1, 0:-1]
+
+    return (top, bottom)
 
 def deg_off_level(landmarks):
     # Corners of the eyes
@@ -132,26 +158,57 @@ def rotate(image, angle):
 
     return rotated
 
+def get_background(stitches, rows):
+    # Setup scarf background 60" x 8"
+    
+    background = cv2.imread('gradient.png')
+    background = cv2.resize(background, (int(rows * 60), int(stitches * 8)), interpolation = cv2.INTER_LINEAR)
+    background = to_bw_pixels(background)
+    return background
+
 # Defining main function
 def main():
     # Initialize parser
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--face", help = "The location of your face file")
+    parser.add_argument("-s", "--stitches", help = "Stitches per inch", default=8)
+    parser.add_argument("-r", "--rows", help = "Rows per inch", default = 11)
+    parser.add_argument("-t", "--top", help="Distance from left edge for top of face", default = 20)
+    parser.add_argument("-b", "--bottom", help="Disatnce from left edge for bottom of face", default=40)
     args = parser.parse_args()
 
     face = args.face
+    stitches = args.stitches
+    rows = args.rows
 
     img = cv2.imread(face)
 
     face, landmarks = find_face_and_features(img)
 
     adjustment = deg_off_level(landmarks)
-    print(adjustment)
+    
+    # If the face is not level
+    if adjustment != 0:
+        # Level the face
+        img = rotate(img, adjustment)
 
-    img = rotate(img, adjustment)
+    img = crop_to_face(img, face, stitches, rows)
 
-    img = to_bw_pixels(img)
-    img.show()
+    # Recompute landmarks
+    face, landmarks = find_face_and_features(img)
+
+    #img = to_bw_pixels(img)
+    #img.show()
+
+    top, bottom = split_face(img, landmarks)
+
+    top = to_bw_pixels(top)
+    bottom = to_bw_pixels(bottom)
+
+    top.show()
+    bottom.show()
+
+    background = get_background(stitches, rows)
 
     #img = crop_to_face(img, face)
 
