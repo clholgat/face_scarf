@@ -86,7 +86,7 @@ def find_face_and_features(img):
         plt.axis("off")
         plt.imshow(imgGray)
         plt.title('Face Detection')
-        plt.show()
+        #plt.show()
         #return None
     
     face = faces[0]
@@ -112,7 +112,7 @@ def find_face_and_features(img):
             cv2.circle(imgGray, (int(x), int(y)), 1, (255, 255, 255), 10)
     plt.axis("off")
     plt.imshow(imgGray)
-    plt.show()
+    #plt.show()
 
     return (face, landmark[0])
 
@@ -166,6 +166,18 @@ def get_background(stitches, rows):
     background = to_bw_pixels(background)
     return background
 
+def place_face(top, bottom, background, rows, stitches, topPos, bottomPos):
+    # Face should be 8" wide at this point, we want the mid point
+    topDistance = rows * topPos - (4 * rows)
+    bottomDistance = rows * bottomPos - (4 * rows)
+
+    _, height = top.size
+
+    background.paste(top, (topDistance, 8 * stitches - height))
+    background.paste(bottom, (bottomDistance, 0))
+
+    return background
+
 # Defining main function
 def main():
     # Initialize parser
@@ -173,13 +185,15 @@ def main():
     parser.add_argument("-f", "--face", help = "The location of your face file")
     parser.add_argument("-s", "--stitches", help = "Stitches per inch", default=8)
     parser.add_argument("-r", "--rows", help = "Rows per inch", default = 11)
-    parser.add_argument("-t", "--top", help="Distance from left edge for top of face", default = 20)
-    parser.add_argument("-b", "--bottom", help="Disatnce from left edge for bottom of face", default=40)
+    parser.add_argument("-t", "--top", help="Distance from left edge for top of face inches", default = 15)
+    parser.add_argument("-b", "--bottom", help="Disatnce from left edge for bottom of face inches", default=45)
     args = parser.parse_args()
 
     face = args.face
     stitches = args.stitches
     rows = args.rows
+    topPos = args.top
+    bottomPos = args.bottom
 
     img = cv2.imread(face)
 
@@ -197,32 +211,18 @@ def main():
     # Recompute landmarks
     face, landmarks = find_face_and_features(img)
 
-    #img = to_bw_pixels(img)
-    #img.show()
-
     top, bottom = split_face(img, landmarks)
 
     top = to_bw_pixels(top)
     bottom = to_bw_pixels(bottom)
 
-    top.show()
-    bottom.show()
+    #top.show()
+    #bottom.show()
 
     background = get_background(stitches, rows)
 
-    #img = crop_to_face(img, face)
-
-    #get_top_bottom(img, face)
-
-    #top, bottom = get_top_bottom(img, face)
-
-    #top = to_bw_pixels(top)
-
-    #bottom = to_bw_pixels(bottom)
-
-    #top.show() 
-    #bottom.show()
-
+    scarf = place_face(top, bottom, background, rows, stitches, topPos, bottomPos)
+    scarf.show()
 
 
 # Using the special variable 
